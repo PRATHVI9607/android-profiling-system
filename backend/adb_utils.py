@@ -1,7 +1,38 @@
-import adbutils
+import subprocess
+import logging
 
 def list_devices():
-    return [d.serial for d in adbutils.adb.device_list() if d.status == "device"]
+    """List connected adb devices by running the `adb devices` command via subprocess.
+
+    Returns a list of device serials where the device state is 'device'. On error,
+    returns a dict with an "error" key.
+    """
+    try:
+        cmd = "adb devices"
+        logging.debug(f"Running cmd: {cmd}")
+        # Use shell=True to run the command string as requested; capture output
+        proc = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        out = proc.stdout
+        logging.info(f"adb devices output:\n{out}")
+
+        devices = []
+        for line in out.splitlines():
+            line = line.strip()
+            if not line or line.lower().startswith("list of devices"):
+                continue
+            parts = line.split()
+            # Expect: <serial> <state> [optional fields]
+            if len(parts) >= 2:
+                serial, state = parts[0], parts[1]
+                if state == "device":
+                    devices.append(serial)
+        return devices
+    except subprocess.CalledProcessError as e:
+        logging.error(f"adb command failed: {e}; stderr: {getattr(e, 'stderr', None)}")
+        return {"error": str(e)}
+    except Exception as e:
+        logging.error(f"Error in list_devices: {e}")
+        return {"error": str(e)}
 
 def run_trace(tool, device, config, thread=""):
     import subprocess
